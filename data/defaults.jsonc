@@ -1,0 +1,329 @@
+{
+  // Dietclaw default configuration
+  // Edit these values to customize what gets scanned and flagged.
+
+  // Directories to skip during scan.
+  // These are typically generated, downloaded, or cached — not your source code.
+  // Dependencies (node_modules) are measured separately in the deps section.
+  "ignoreDirs": [
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    "out",
+    ".next",
+    ".nuxt",
+    ".turbo",
+    "coverage",
+    ".cache",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "target",
+    "vendor"
+  ],
+
+  // Files above this size (in bytes) are flagged as large.
+  // Default: 500 KB (524288 bytes)
+  "largeFileThreshold": 524288,
+
+  // Source files above this many lines are flagged as complex.
+  // Default: 300 lines
+  "longFileThreshold": 300,
+
+  // File extensions treated as source code — the code you actually write.
+  // These count toward your "Your code" percentage.
+  "sourceExts": [
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs",
+    ".py",
+    ".go",
+    ".rs",
+    ".rb",
+    ".java",
+    ".kt",
+    ".swift",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cs",
+    ".php",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".html",
+    ".css",
+    ".scss"
+  ],
+
+  // Images, video, audio, and fonts.
+  // Often the biggest surprise in a codebase —
+  // a single PNG can outweigh all your source code.
+  "mediaExts": [
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".ico",
+    ".webp",
+    ".bmp",
+    ".mp4",
+    ".mov",
+    ".avi",
+    ".webm",
+    ".mkv",
+    ".mp3",
+    ".wav",
+    ".ogg",
+    ".flac",
+    ".aac",
+    ".ttf",
+    ".otf",
+    ".woff",
+    ".woff2",
+    ".eot"
+  ],
+
+  // Database files, datasets, and structured data stored in the repo.
+  "dataExts": [".db", ".sqlite", ".sqlite3", ".csv", ".tsv", ".parquet"],
+
+  // Compiled binaries, libraries, and archives.
+  // These should rarely live in source control.
+  "binaryExts": [
+    ".wasm",
+    ".exe",
+    ".dll",
+    ".so",
+    ".dylib",
+    ".o",
+    ".a",
+    ".zip",
+    ".tar",
+    ".gz",
+    ".bz2",
+    ".7z",
+    ".rar"
+  ],
+
+  // Lock files and other generated files identified by exact filename.
+  // Measured but not counted as source code.
+  "generatedNames": [
+    "pnpm-lock.yaml",
+    "package-lock.json",
+    "yarn.lock",
+    "bun.lockb",
+    "Cargo.lock",
+    "Gemfile.lock",
+    "poetry.lock",
+    "go.sum"
+  ],
+
+  // File extensions for generated output — sourcemaps, type declarations, minified bundles.
+  "generatedExts": [".map", ".d.ts", ".d.mts", ".min.js", ".min.css"],
+
+  // Config files identified by exact filename.
+  // These are project configuration — build tools, linters, formatters, CI, etc.
+  // Counted separately from source code to show config sprawl.
+  "configNames": [
+    // Package managers
+    "package.json",
+    "Cargo.toml",
+    "Gemfile",
+    "pyproject.toml",
+    "go.mod",
+
+    // TypeScript / JavaScript
+    "tsconfig.json",
+    "jsconfig.json",
+
+    // Bundlers
+    "webpack.config.js",
+    "webpack.config.ts",
+    "vite.config.ts",
+    "vite.config.js",
+    "tsup.config.ts",
+    "tsup.config.js",
+    "rollup.config.js",
+    "rollup.config.ts",
+    "esbuild.config.js",
+    "esbuild.config.ts",
+    "turbo.json",
+
+    // Linters and formatters
+    "biome.json",
+    "biome.jsonc",
+    ".eslintrc",
+    ".eslintrc.js",
+    ".eslintrc.cjs",
+    ".eslintrc.yml",
+    ".eslintrc.json",
+    "eslint.config.js",
+    "eslint.config.ts",
+    ".prettierrc",
+    ".prettierrc.js",
+    ".prettierrc.json",
+    ".prettierrc.yml",
+    ".oxlintrc.json",
+    ".oxfmtrc.jsonc",
+    ".stylelintrc",
+    ".stylelintrc.json",
+    ".editorconfig",
+
+    // Testing
+    "vitest.config.ts",
+    "vitest.config.js",
+    "jest.config.js",
+    "jest.config.ts",
+    "playwright.config.ts",
+    "cypress.config.ts",
+    "cypress.config.js",
+
+    // CSS / UI frameworks
+    "tailwind.config.js",
+    "tailwind.config.ts",
+    "postcss.config.js",
+    "postcss.config.ts",
+
+    // Meta-frameworks
+    "next.config.js",
+    "next.config.ts",
+    "next.config.mjs",
+    "nuxt.config.ts",
+    "svelte.config.js",
+    "astro.config.mjs",
+    "astro.config.ts",
+    "remix.config.js",
+
+    // Transpilers
+    "babel.config.js",
+    "babel.config.json",
+    ".babelrc",
+    ".swcrc",
+
+    // Docker
+    "Dockerfile",
+    ".dockerignore",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "compose.yml",
+    "compose.yaml",
+
+    // CI / CD
+    ".gitlab-ci.yml",
+    "Jenkinsfile",
+
+    // Task runners
+    "Makefile",
+    "Taskfile.yml",
+    "Rakefile",
+    "Justfile",
+
+    // Git
+    ".gitignore",
+    ".gitattributes",
+    ".mailmap",
+
+    // Environment
+    ".env.example",
+    ".env.template",
+
+    // Version managers
+    ".node-version",
+    ".nvmrc",
+    ".tool-versions",
+    ".python-version",
+    ".ruby-version",
+
+    // Misc
+    ".npmrc",
+    ".npmignore",
+    "renovate.json",
+    ".changeset/config.json",
+    "vercel.json",
+    "netlify.toml",
+    "fly.toml",
+    ".pre-commit-config.yaml"
+  ],
+
+  // Files that identify a directory as a project root.
+  // Used by --each to detect subprojects in a parent directory.
+  // If any of these exist in a subdirectory, it's treated as its own project.
+  "projectMarkers": [
+    "package.json",
+    "Cargo.toml",
+    "go.mod",
+    "pyproject.toml",
+    "setup.py",
+    "Gemfile",
+    "build.gradle",
+    "build.gradle.kts",
+    "pom.xml",
+    "mix.exs",
+    "deno.json",
+    "composer.json",
+    "pubspec.yaml",
+    "Package.swift",
+    "CMakeLists.txt",
+    "Makefile"
+  ],
+
+  // Language-to-name mapping for the language breakdown.
+  // Add new languages here — no code changes needed.
+  "languageMap": {
+    ".ts": "TypeScript",
+    ".tsx": "TypeScript",
+    ".js": "JavaScript",
+    ".jsx": "JavaScript",
+    ".mjs": "JavaScript",
+    ".cjs": "JavaScript",
+    ".py": "Python",
+    ".go": "Go",
+    ".rs": "Rust",
+    ".rb": "Ruby",
+    ".java": "Java",
+    ".kt": "Kotlin",
+    ".swift": "Swift",
+    ".c": "C",
+    ".cpp": "C++",
+    ".h": "C",
+    ".hpp": "C++",
+    ".cs": "C#",
+    ".php": "PHP",
+    ".html": "HTML",
+    ".css": "CSS",
+    ".scss": "SCSS",
+    ".json": "JSON",
+    ".yaml": "YAML",
+    ".yml": "YAML",
+    ".toml": "TOML",
+    ".xml": "XML",
+    ".md": "Markdown",
+    ".sql": "SQL",
+    ".sh": "Shell",
+    ".bash": "Shell",
+    ".zsh": "Shell",
+    ".dart": "Dart",
+    ".ex": "Elixir",
+    ".exs": "Elixir",
+    ".lua": "Lua",
+    ".r": "R",
+    ".R": "R",
+    ".scala": "Scala",
+    ".zig": "Zig",
+    ".nim": "Nim",
+    ".v": "V",
+    ".cr": "Crystal",
+    ".clj": "Clojure",
+    ".hs": "Haskell",
+    ".ml": "OCaml",
+    ".erl": "Erlang",
+    ".vue": "Vue",
+    ".svelte": "Svelte"
+  }
+}
