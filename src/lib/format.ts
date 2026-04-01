@@ -1,5 +1,6 @@
 import path from "node:path";
 import chalk from "chalk";
+import type { SnapshotRow } from "./db.js";
 import { renderTable } from "./table.js";
 import type { DepsResult, ScanResult } from "./types.js";
 
@@ -251,6 +252,77 @@ export function formatDeps(result: DepsResult): string {
       );
     }
 
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+export function formatTrend(project: string, snapshots: SnapshotRow[]): string {
+  const lines: string[] = [];
+
+  lines.push("");
+  lines.push(chalk.bold("  Project Trend"));
+  lines.push(chalk.gray(`  ${project}`));
+  lines.push("");
+
+  if (snapshots.length === 0) {
+    lines.push(
+      `  ${chalk.yellow("No snapshots yet. Run 'dietclaw scan --save' to start tracking.")}`,
+    );
+    lines.push("");
+    return lines.join("\n");
+  }
+
+  lines.push(chalk.bold(`  History (${snapshots.length} snapshots)`));
+  lines.push("");
+
+  const rows = snapshots.map((s) => [
+    s.timestamp,
+    formatNumber(s.total_files),
+    formatNumber(s.total_lines),
+    formatSize(s.source_size),
+    formatSize(s.total_size),
+    s.dep_count !== null ? `${s.dep_count}` : "—",
+    s.dep_size !== null ? formatSize(s.dep_size) : "—",
+  ]);
+
+  lines.push(
+    renderTable(
+      ["Timestamp", "Files", "Lines", "Source code", "Total", "Packages", "Dependencies"],
+      rows,
+    ),
+  );
+  lines.push("");
+
+  if (snapshots.length >= 2) {
+    const latest = snapshots[0];
+    const oldest = snapshots[snapshots.length - 1];
+
+    lines.push(chalk.bold("  Change"));
+
+    const sizeDiff = latest.total_size - oldest.total_size;
+    const fileDiff = latest.total_files - oldest.total_files;
+    const lineDiff = latest.total_lines - oldest.total_lines;
+    const sourceDiff = latest.source_size - oldest.source_size;
+
+    const arrow = (diff: number) =>
+      diff > 0
+        ? chalk.red(`+${formatSize(diff)}`)
+        : diff < 0
+          ? chalk.green(formatSize(diff))
+          : "no change";
+    const arrowNum = (diff: number) =>
+      diff > 0
+        ? chalk.red(`+${formatNumber(diff)}`)
+        : diff < 0
+          ? chalk.green(formatNumber(diff))
+          : "no change";
+
+    lines.push(`    Total        ${arrow(sizeDiff)}`);
+    lines.push(`    Source code  ${arrow(sourceDiff)}`);
+    lines.push(`    Files        ${arrowNum(fileDiff)}`);
+    lines.push(`    Lines        ${arrowNum(lineDiff)}`);
     lines.push("");
   }
 

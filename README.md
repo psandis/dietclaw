@@ -39,6 +39,8 @@ pnpm cli scan                      # scan current directory
 pnpm cli scan ../myproject         # scan another project
 pnpm cli scan ~/Projects --each    # compare all projects
 pnpm cli deps                      # dependency analysis
+pnpm cli scan --save               # save a snapshot
+pnpm cli trend                     # view history
 ```
 
 ## CLI
@@ -202,11 +204,49 @@ When the user asks about project health, size, bloat, or dependencies, use the `
 - To scan a project: `dietclaw --json scan`
 - To analyze dependencies: `dietclaw --json deps`
 - To compare projects: `dietclaw --json scan ~/Projects --each`
+- To view trend: `dietclaw --json trend`
 ```
+
+### Track changes over time
+
+Save snapshots with `--save` and view the trend:
+
+```bash
+dietclaw scan --save              # save a snapshot
+dietclaw trend                    # view history
+```
+
+```
+dietclaw trend
+
+  Project Trend
+  /home/dev/myapp
+
+  History (3 snapshots)
+
+┌─────────────────────┬───────┬────────┬─────────────┬────────┬──────────┬──────────────┐
+│ Timestamp           │ Files │ Lines  │ Source code │ Total  │ Packages │ Dependencies │
+├─────────────────────┼───────┼────────┼─────────────┼────────┼──────────┼──────────────┤
+│ 2026-04-01 14:32:01 │ 22    │ 3,200  │ 48.1 KB     │ 2.6 MB │ 92       │ 102.4 MB     │
+│ 2026-03-28 10:15:43 │ 20    │ 2,800  │ 42.8 KB     │ 2.1 MB │ 88       │ 96.0 MB      │
+│ 2026-03-20 09:30:12 │ 15    │ 1,950  │ 32.1 KB     │ 1.8 MB │ 85       │ 92.0 MB      │
+└─────────────────────┴───────┴────────┴─────────────┴────────┴──────────┴──────────────┘
+
+  Change
+    Total        +819.2 KB
+    Source code  +16.0 KB
+    Files        +7
+    Lines        +1,250
+```
+
+Notes:
+
+- snapshots are stored locally in `~/.dietclaw/history.db`
+- override storage location with `DIETCLAW_HOME` environment variable
+- `--limit <n>` controls how many snapshots to show (default: `20`)
 
 ## Roadmap
 
-- `dietclaw trend` — historical tracking with snapshots over time
 - `dietclaw monitor` — runtime performance monitoring (memory, CPU)
 - CI-friendly exit codes and thresholds
 
