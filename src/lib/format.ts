@@ -1,5 +1,6 @@
 import path from "node:path";
 import chalk from "chalk";
+import semver from "semver";
 import type { SnapshotRow } from "./db.js";
 import { renderTable } from "./table.js";
 import type { DepsResult, ScanResult } from "./types.js";
@@ -15,11 +16,45 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: "Other files",
 };
 
+const EMPTY_CELL = "-";
+
+type UpdateLevel = "major" | "minor" | "patch" | "other";
+
+const UPDATE_COLORS: Record<UpdateLevel, (text: string) => string> = {
+  major: chalk.red,
+  minor: chalk.yellow,
+  patch: chalk.green,
+  other: chalk.gray,
+};
+
+export function updateLevel(current: string, latest: string): UpdateLevel {
+  if (!semver.valid(current) || !semver.valid(latest)) return "other";
+
+  switch (semver.diff(current, latest)) {
+    case "major":
+    case "premajor":
+      return "major";
+    case "minor":
+    case "preminor":
+      return "minor";
+    case "patch":
+    case "prepatch":
+      return "patch";
+    default:
+      return "other";
+  }
+}
+
 export function formatSize(bytes: number): string {
+  if (bytes < 0) return `-${formatSize(-bytes)}`;
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+export function plural(count: number, noun: string): string {
+  return `${formatNumber(count)} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 export function formatNumber(n: number): string {
@@ -148,8 +183,8 @@ export function formatEach(results: ScanResult[]): string {
     return [
       chalk.bold(path.basename(r.path)),
       formatSize(r.weight.sourceSize),
-      mediaCat ? formatSize(mediaCat.size) : "—",
-      r.dependencies?.totalSize ? formatSize(r.dependencies.totalSize) : "—",
+      mediaCat ? formatSize(mediaCat.size) : EMPTY_CELL,
+      r.dependencies?.totalSize ? formatSize(r.dependencies.totalSize) : EMPTY_CELL,
     ];
   });
 
@@ -167,27 +202,22 @@ export function formatDeps(result: DepsResult): string {
   lines.push(chalk.gray(`  ${result.path}`));
   lines.push("");
 
+  for (const warning of result.warnings) {
+    lines.push(`  ${chalk.yellow(`Warning: ${warning}`)}`);
+  }
+  if (result.warnings.length > 0) lines.push("");
+
   // Outdated
-  if (result.outdated.length > 0) {
+  if (result.outdated === null) {
+    lines.push(chalk.bold("  Outdated Packages"));
+    lines.push(`  ${chalk.red("Could not check: 'npm outdated' failed or is not installed")}`);
+    lines.push("");
+  } else if (result.outdated.length > 0) {
     lines.push(chalk.bold.yellow(`  Outdated Packages (${result.outdated.length})`));
     lines.push("");
     const outdatedRows = result.outdated.map((pkg) => {
-      const [curMajor, curMinor] = pkg.current.split(".");
-      const [latMajor, latMinor] = pkg.latest.split(".");
-      let level: string;
-      let colorFn: typeof chalk.red;
-
-      if (curMajor !== latMajor) {
-        level = "major";
-        colorFn = chalk.red;
-      } else if (curMinor !== latMinor) {
-        level = "minor";
-        colorFn = chalk.yellow;
-      } else {
-        level = "patch";
-        colorFn = chalk.green;
-      }
-
+      const level = updateLevel(pkg.current, pkg.latest);
+      const colorFn = UPDATE_COLORS[level];
       return [pkg.name, pkg.current, colorFn(pkg.latest), colorFn(level)];
     });
     lines.push(renderTable(["Package", "Current", "Latest", "Update"], outdatedRows));
@@ -206,7 +236,7 @@ export function formatDeps(result: DepsResult): string {
     const unusedRows = result.unused.map((pkg) => [
       chalk.yellow(pkg.name),
       pkg.version,
-      pkg.size !== null ? formatSize(pkg.size) : "—",
+      pkg.size !== null ? formatSize(pkg.size) : EMPTY_CELL,
     ]);
     lines.push(renderTable(["Package", "Version", "Size"], unusedRows));
     lines.push("");
@@ -274,7 +304,7 @@ export function formatTrend(project: string, snapshots: SnapshotRow[]): string {
     return lines.join("\n");
   }
 
-  lines.push(chalk.bold(`  History (${snapshots.length} snapshots)`));
+  lines.push(chalk.bold(`  History (${plural(snapshots.length, "snapshot")})`));
   lines.push("");
 
   const rows = snapshots.map((s) => [
@@ -283,8 +313,8 @@ export function formatTrend(project: string, snapshots: SnapshotRow[]): string {
     formatNumber(s.total_lines),
     formatSize(s.source_size),
     formatSize(s.total_size),
-    s.dep_count !== null ? `${s.dep_count}` : "—",
-    s.dep_size !== null ? formatSize(s.dep_size) : "—",
+    s.dep_count !== null ? `${s.dep_count}` : EMPTY_CELL,
+    s.dep_size !== null ? formatSize(s.dep_size) : EMPTY_CELL,
   ]);
 
   lines.push(

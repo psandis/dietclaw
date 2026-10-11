@@ -75,10 +75,13 @@ export interface ScanOptions {
 // Dependency analysis
 export interface DepsResult {
   path: string;
-  outdated: OutdatedPackage[];
+  // null when npm outdated could not run
+  outdated: OutdatedPackage[] | null;
   unused: UnusedPackage[];
   heaviest: HeavyPackage[];
   duplicates: DuplicatePackage[];
+  // Problems that limited the analysis, such as an unreadable lockfile
+  warnings: string[];
 }
 
 export interface UnusedPackage {

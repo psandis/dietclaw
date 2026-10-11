@@ -4,17 +4,22 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import type { ScanResult } from "./types.js";
 
-const DIETCLAW_HOME = process.env.DIETCLAW_HOME || path.join(os.homedir(), ".dietclaw");
-const DB_PATH = path.join(DIETCLAW_HOME, "history.db");
-
 let db: Database.Database | null = null;
+
+export function getDietclawHome(): string {
+  return process.env.DIETCLAW_HOME || path.join(os.homedir(), ".dietclaw");
+}
+
+export function getDbPath(): string {
+  return path.join(getDietclawHome(), "history.db");
+}
 
 export function getDb(): Database.Database {
   if (db) return db;
 
-  fs.mkdirSync(DIETCLAW_HOME, { recursive: true });
+  fs.mkdirSync(getDietclawHome(), { recursive: true });
 
-  db = new Database(DB_PATH);
+  db = new Database(getDbPath());
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
 
@@ -85,10 +90,6 @@ export function getSnapshots(project: string, limit = 20): SnapshotRow[] {
   const db = getDb();
 
   return db
-    .prepare("SELECT * FROM snapshots WHERE project = ? ORDER BY timestamp DESC LIMIT ?")
+    .prepare("SELECT * FROM snapshots WHERE project = ? ORDER BY id DESC LIMIT ?")
     .all(project, limit) as SnapshotRow[];
-}
-
-export function getDbPath(): string {
-  return DB_PATH;
 }

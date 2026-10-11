@@ -1,12 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { type ParseError, parse, printParseErrorCode } from "jsonc-parser";
 
 export interface Defaults {
   ignoreDirs: string[];
   largeFileThreshold: number;
   longFileThreshold: number;
   sourceExts: string[];
+  moduleExts: string[];
   mediaExts: string[];
   dataExts: string[];
   binaryExts: string[];
@@ -18,10 +20,6 @@ export interface Defaults {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-function stripJsoncComments(text: string): string {
-  return text.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
-}
 
 function findDefaultsFile(): string {
   const candidates = [
@@ -36,9 +34,23 @@ function findDefaultsFile(): string {
   throw new Error("Could not find data/defaults.jsonc");
 }
 
+export function parseDefaults(text: string, source: string): Defaults {
+  const errors: ParseError[] = [];
+  const parsed = parse(text, errors, { allowTrailingComma: true });
+
+  if (errors.length > 0) {
+    const details = errors
+      .map((e) => `${printParseErrorCode(e.error)} at offset ${e.offset}`)
+      .join(", ");
+    throw new Error(`Invalid JSONC in ${source}: ${details}`);
+  }
+
+  return parsed as Defaults;
+}
+
 export function loadDefaults(): Defaults {
-  const raw = fs.readFileSync(findDefaultsFile(), "utf-8");
-  return JSON.parse(stripJsoncComments(raw));
+  const file = findDefaultsFile();
+  return parseDefaults(fs.readFileSync(file, "utf-8"), file);
 }
 
 export const defaults = loadDefaults();

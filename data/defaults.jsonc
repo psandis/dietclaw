@@ -3,7 +3,7 @@
   // Edit these values to customize what gets scanned and flagged.
 
   // Directories to skip during scan.
-  // These are typically generated, downloaded, or cached — not your source code.
+  // These are typically generated, downloaded, or cached, not your source code.
   // Dependencies (node_modules) are measured separately in the deps section.
   "ignoreDirs": [
     "node_modules",
@@ -31,11 +31,13 @@
   // Default: 300 lines
   "longFileThreshold": 300,
 
-  // File extensions treated as source code — the code you actually write.
+  // File extensions treated as source code: the code you actually write.
   // These count toward your "Your code" percentage.
   "sourceExts": [
     ".ts",
     ".tsx",
+    ".mts",
+    ".cts",
     ".js",
     ".jsx",
     ".mjs",
@@ -61,8 +63,12 @@
     ".scss"
   ],
 
+  // JavaScript and TypeScript files parsed for import, export, and require
+  // statements when looking for unused dependencies.
+  "moduleExts": [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"],
+
   // Images, video, audio, and fonts.
-  // Often the biggest surprise in a codebase —
+  // Often the biggest surprise in a codebase:
   // a single PNG can outweigh all your source code.
   "mediaExts": [
     ".png",
@@ -124,11 +130,11 @@
     "go.sum"
   ],
 
-  // File extensions for generated output — sourcemaps, type declarations, minified bundles.
+  // File extensions for generated output: sourcemaps, type declarations, minified bundles.
   "generatedExts": [".map", ".d.ts", ".d.mts", ".min.js", ".min.css"],
 
   // Config files identified by exact filename.
-  // These are project configuration — build tools, linters, formatters, CI, etc.
+  // These are project configuration: build tools, linters, formatters, CI, etc.
   // Counted separately from source code to show config sprawl.
   "configNames": [
     // Package managers
@@ -274,10 +280,12 @@
   ],
 
   // Language-to-name mapping for the language breakdown.
-  // Add new languages here — no code changes needed.
+  // Add new languages here, no code changes needed.
   "languageMap": {
     ".ts": "TypeScript",
     ".tsx": "TypeScript",
+    ".mts": "TypeScript",
+    ".cts": "TypeScript",
     ".js": "JavaScript",
     ".jsx": "JavaScript",
     ".mjs": "JavaScript",

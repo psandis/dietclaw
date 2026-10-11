@@ -1,8 +1,17 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import semver from "semver";
 import { defaults } from "./config.js";
-import { dirSize, type PackageJson, readAllSource, readPackageJson } from "./fs-utils.js";
+import {
+  dirSize,
+  listFiles,
+  type PackageJson,
+  readPackageJson,
+  resolveProjectPath,
+} from "./fs-utils.js";
+import { collectModuleSpecifiers, packageNameOf } from "./imports.js";
+import { LockfileError, type PnpmLockfile, readPnpmLockfile } from "./pnpm-lock.js";
 import type {
   DepsOptions,
   DepsResult,
@@ -13,55 +22,111 @@ import type {
   UnusedPackage,
 } from "./types.js";
 
-const SOURCE_EXTS = new Set(defaults.sourceExts);
+const MODULE_EXTS = new Set(defaults.moduleExts);
+const IGNORE_DIRS = new Set(defaults.ignoreDirs);
 
 export function analyzeDeps(options: DepsOptions): DepsResult {
-  const root = path.resolve(options.path);
+  const root = resolveProjectPath(options.path);
   const limit = options.limit || 20;
   const pkg = readPackageJson(root);
+  const warnings: string[] = [];
 
   if (!pkg) {
-    return { path: root, outdated: [], unused: [], heaviest: [], duplicates: [] };
+    return { path: root, outdated: [], unused: [], heaviest: [], duplicates: [], warnings };
+  }
+
+  let lockfile: PnpmLockfile | null = null;
+  try {
+    lockfile = readPnpmLockfile(root);
+  } catch (err) {
+    if (!(err instanceof LockfileError)) throw err;
+    warnings.push(`${err.message}. Version conflicts were not analyzed.`);
   }
 
   return {
     path: root,
-    outdated: findOutdated(root, pkg).slice(0, limit),
+    outdated: findOutdated(root, pkg)?.slice(0, limit) ?? null,
     unused: findUnused(root, pkg),
-    heaviest: findHeaviest(root, limit),
-    duplicates: findDuplicates(root, pkg).slice(0, limit),
+    heaviest: findHeaviest(root, lockfile, limit),
+    duplicates: lockfile ? findDuplicates(lockfile).slice(0, limit) : [],
+    warnings,
   };
 }
 
 // --- Outdated: uses npm outdated --json ---
+// Returns null when the check could not run (npm missing, timeout, bad output).
 
-function findOutdated(root: string, pkg: PackageJson): OutdatedPackage[] {
+interface NpmOutdatedEntry {
+  current?: string;
+  latest?: string;
+}
+
+type NpmOutdatedReport = Record<string, NpmOutdatedEntry>;
+
+interface ExecError extends Error {
+  status: number | null;
+  stdout: string;
+}
+
+function findOutdated(root: string, pkg: PackageJson): OutdatedPackage[] | null {
+  const report = runNpmOutdated(root);
+  if (!report) return null;
+
+  const deps = pkg.dependencies || {};
+
+  return Object.entries(report)
+    .flatMap(([name, { current, latest }]): OutdatedPackage[] =>
+      current && latest && current !== latest
+        ? [{ name, current, latest, type: deps[name] ? "dep" : "dev" }]
+        : [],
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Runs through the platform shell (sh or cmd.exe) so npm.cmd resolves on Windows.
+// The command is a fixed string, so no user input reaches the shell.
+function runNpmOutdated(root: string): NpmOutdatedReport | null {
+  let stdout: string;
+
   try {
-    const raw = execSync("npm outdated --json 2>/dev/null || true", {
+    stdout = execSync("npm outdated --json", {
       cwd: root,
       encoding: "utf-8",
       timeout: 30000,
-    }).trim();
-
-    if (!raw || raw === "{}") return [];
-
-    const data = JSON.parse(raw) as Record<string, { current?: string; latest?: string }>;
-    const deps = pkg.dependencies || {};
-
-    return Object.entries(data)
-      .filter(([, info]) => info.current && info.latest && info.current !== info.latest)
-      .map(
-        ([name, info]): OutdatedPackage => ({
-          name,
-          current: info.current || "",
-          latest: info.latest || "",
-          type: deps[name] ? "dep" : "dev",
-        }),
-      )
-      .sort((a, b) => a.name.localeCompare(b.name));
-  } catch {
-    return [];
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch (err) {
+    // Exit code 1 is npm's documented signal for "outdated packages found".
+    // Anything else (missing npm, timeout, crash) means the check did not run.
+    if (!isExecError(err) || err.status !== 1) return null;
+    stdout = err.stdout;
   }
+
+  return parseNpmOutdated(stdout);
+}
+
+export function parseNpmOutdated(stdout: string): NpmOutdatedReport | null {
+  const text = stdout.trim();
+  if (text === "") return {};
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+
+  // On failure npm still prints JSON, shaped as { "error": { code, summary } }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+  if ("error" in parsed) return null;
+
+  return parsed as NpmOutdatedReport;
+}
+
+function isExecError(err: unknown): err is ExecError {
+  return (
+    err instanceof Error && "status" in err && "stdout" in err && typeof err.stdout === "string"
+  );
 }
 
 // --- Unused: checks imports against declared dependencies ---
@@ -70,60 +135,64 @@ function findUnused(root: string, pkg: PackageJson): UnusedPackage[] {
   const deps = pkg.dependencies || {};
   if (Object.keys(deps).length === 0) return [];
 
-  const source = readAllSource(root, SOURCE_EXTS);
-  if (!source) return [];
-
+  const used = findImportedPackages(root);
   const nmPath = path.join(root, "node_modules");
 
   return Object.entries(deps)
-    .filter(([name]) => !isImported(name, source))
+    .filter(([name]) => !used.has(name))
     .map(([name, specifier]) => {
-      const version = readPackageJson(path.join(nmPath, ...name.split("/")))?.version || specifier;
       const pkgDir = path.join(nmPath, ...name.split("/"));
+      const version = readPackageJson(pkgDir)?.version || specifier;
       const size = fs.existsSync(pkgDir) ? dirSize(pkgDir) : null;
       return { name, version, size };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function isImported(name: string, source: string): boolean {
-  return [
-    `from "${name}"`,
-    `from '${name}'`,
-    `from "${name}/`,
-    `from '${name}/`,
-    `require("${name}")`,
-    `require('${name}')`,
-    `require("${name}/`,
-    `require('${name}/`,
-    `import("${name}")`,
-    `import('${name}')`,
-  ].some((p) => source.includes(p));
+// Package names imported anywhere in the project's JS/TS files
+export function findImportedPackages(root: string): Set<string> {
+  const packages = new Set<string>();
+
+  for (const file of listFiles(root, IGNORE_DIRS)) {
+    if (!MODULE_EXTS.has(path.extname(file).toLowerCase())) continue;
+
+    const source = fs.readFileSync(file, "utf-8");
+    for (const specifier of collectModuleSpecifiers(file, source)) {
+      const name = packageNameOf(specifier);
+      if (name) packages.add(name);
+    }
+  }
+
+  return packages;
 }
 
 // --- Heaviest: measures real package sizes in node_modules ---
 
-function findHeaviest(root: string, limit: number): HeavyPackage[] {
+function findHeaviest(root: string, lockfile: PnpmLockfile | null, limit: number): HeavyPackage[] {
   const nmPath = path.join(root, "node_modules");
   if (!fs.existsSync(nmPath)) return [];
 
   const pnpmStore = path.join(nmPath, ".pnpm");
   const packages = fs.existsSync(pnpmStore)
-    ? measurePnpmPackages(pnpmStore)
+    ? measurePnpmPackages(pnpmStore, lockfile)
     : measureFlatPackages(nmPath);
 
   return packages.sort((a, b) => b.size - a.size).slice(0, limit);
 }
 
-function measurePnpmPackages(pnpmPath: string): HeavyPackage[] {
+// When a lockfile is available, store entries it no longer references
+// (left behind after dependency changes) are skipped.
+function measurePnpmPackages(pnpmPath: string, lockfile: PnpmLockfile | null): HeavyPackage[] {
   const largest = new Map<string, number>();
 
   for (const entry of fs.readdirSync(pnpmPath, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
 
-    const name = parsePnpmDirName(entry.name);
-    if (!name) continue;
+    const parsed = parsePnpmDirEntry(entry.name);
+    if (!parsed) continue;
+    if (lockfile && !lockfile.versions.get(parsed.name)?.has(parsed.version)) continue;
 
+    const { name } = parsed;
     const pkgDir = path.join(pnpmPath, entry.name, "node_modules", ...name.split("/"));
     if (!fs.existsSync(pkgDir)) continue;
 
@@ -156,106 +225,45 @@ function measureFlatPackages(nmPath: string): HeavyPackage[] {
   return packages;
 }
 
-// --- Duplicates: finds packages installed at multiple versions ---
-// pnpm stores each resolved package in .pnpm/<name>@<version>/node_modules/
-// We read the nested package.json to trace which parent resolves which version.
+// --- Duplicates: packages resolved at more than one version ---
+// Read from pnpm-lock.yaml, so only packages pnpm actually uses on this
+// platform are reported, not leftovers in node_modules/.pnpm.
 
-function findDuplicates(root: string, pkg: PackageJson): DuplicatePackage[] {
-  const pnpmPath = path.join(root, "node_modules", ".pnpm");
-  if (!fs.existsSync(pnpmPath)) return [];
-
-  const directDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
-  const entries = fs.readdirSync(pnpmPath, { withFileTypes: true });
-
-  // Step 1: collect all installed versions per package
-  const installed = new Map<string, Set<string>>();
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-    const parsed = parsePnpmDirEntry(entry.name);
-    if (!parsed) continue;
-
-    const versions = installed.get(parsed.name) || new Set();
-    versions.add(parsed.version);
-    installed.set(parsed.name, versions);
-  }
-
-  // Step 2: identify which packages have multiple versions
-  const duplicateNames = new Set<string>();
-  for (const [name, versions] of installed) {
-    if (versions.size > 1) duplicateNames.add(name);
-  }
-  if (duplicateNames.size === 0) return [];
-
-  // Step 3: trace which parent package resolves each version
-  const resolvedBy = new Map<string, Map<string, Set<string>>>();
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-
-    const parent = parsePnpmDirName(entry.name);
-    if (!parent) continue;
-
-    const entryNm = path.join(pnpmPath, entry.name, "node_modules");
-    if (!fs.existsSync(entryNm)) continue;
-
-    for (const target of duplicateNames) {
-      if (target === parent) continue;
-
-      const version = readNestedVersion(entryNm, target);
-      if (!version) continue;
-
-      const byTarget = resolvedBy.get(target) || new Map<string, Set<string>>();
-      const parents = byTarget.get(version) || new Set<string>();
-      parents.add(parent);
-      byTarget.set(version, parents);
-      resolvedBy.set(target, byTarget);
-    }
-  }
-
-  // Step 4: build results with "required by" context
+export function findDuplicates(lockfile: PnpmLockfile): DuplicatePackage[] {
   const results: DuplicatePackage[] = [];
-  for (const [name, versions] of installed) {
+
+  for (const [name, versions] of lockfile.versions) {
     if (versions.size <= 1) continue;
 
-    const byVersion = resolvedBy.get(name) || new Map();
-    const dupEntries: DuplicateEntry[] = [...versions].sort().map((version) => ({
+    const entries: DuplicateEntry[] = [...versions].sort(compareVersions).map((version) => ({
       version,
-      requiredBy: labelRequiredBy(name, version, directDeps, byVersion.get(version)),
+      requiredBy: labelRequiredBy(
+        lockfile.direct.get(name) === version,
+        lockfile.dependents.get(`${name}@${version}`),
+      ),
     }));
 
-    results.push({ name, entries: dupEntries });
+    results.push({ name, entries });
   }
 
-  return results.sort((a, b) => b.entries.length - a.entries.length);
+  return results.sort(
+    (a, b) => b.entries.length - a.entries.length || a.name.localeCompare(b.name),
+  );
 }
 
-function labelRequiredBy(
-  name: string,
-  version: string,
-  directDeps: Record<string, string>,
-  parents: Set<string> | undefined,
-): string {
-  if (directDeps[name]) {
-    const specMajor = directDeps[name].replace(/[\^~>=<\s]/g, "").split(".")[0];
-    if (version.split(".")[0] === specMajor) return "direct";
-  }
+export function labelRequiredBy(isDirect: boolean, parents: Set<string> | undefined): string {
+  if (isDirect) return "direct";
 
   if (parents && parents.size > 0) {
-    const first = [...parents][0];
-    return parents.size > 1 ? `${first} +${parents.size - 1} more` : first;
+    const [first, ...rest] = [...parents].sort();
+    return rest.length > 0 ? `${first} +${rest.length} more` : first;
   }
 
   return "transitive";
 }
 
-function readNestedVersion(entryNm: string, packageName: string): string | null {
-  try {
-    const pkgJson = JSON.parse(
-      fs.readFileSync(path.join(entryNm, ...packageName.split("/"), "package.json"), "utf-8"),
-    );
-    return pkgJson.version || null;
-  } catch {
-    return null;
-  }
+function compareVersions(a: string, b: string): number {
+  return semver.valid(a) && semver.valid(b) ? semver.compare(a, b) : a.localeCompare(b);
 }
 
 // --- pnpm directory name parsing ---
@@ -272,7 +280,7 @@ function parsePnpmDirName(dirName: string): string | null {
   return atIdx > 0 ? dirName.slice(0, atIdx) : null;
 }
 
-function parsePnpmDirEntry(dirName: string): { name: string; version: string } | null {
+export function parsePnpmDirEntry(dirName: string): { name: string; version: string } | null {
   const name = parsePnpmDirName(dirName);
   if (!name) return null;
 

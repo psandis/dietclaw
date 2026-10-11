@@ -14,7 +14,7 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-function writeFile(relativePath: string, content: string) {
+function writeFile(relativePath: string, content: string | Buffer) {
   const fullPath = path.join(tmpDir, relativePath);
   fs.mkdirSync(path.dirname(fullPath), { recursive: true });
   fs.writeFileSync(fullPath, content);
@@ -119,6 +119,42 @@ describe("scan", () => {
 
     expect(result.complexity.longFiles.length).toBe(1);
     expect(result.complexity.longFiles[0].path).toBe("big.ts");
+  });
+
+  it("counts a trailing newline as the end of the last line", () => {
+    writeFile("a.ts", "one\ntwo\n");
+    writeFile("b.ts", "one\ntwo");
+    writeFile("empty.ts", "");
+
+    const result = scan({ path: tmpDir });
+
+    expect(result.totalLines).toBe(4);
+  });
+
+  it("counts CRLF line endings correctly", () => {
+    writeFile("win.ts", "one\r\ntwo\r\nthree\r\n");
+
+    const result = scan({ path: tmpDir });
+
+    expect(result.totalLines).toBe(3);
+  });
+
+  it("does not count lines in binary files", () => {
+    writeFile("app.ts", "const x = 1;\n");
+    writeFile("logo.png", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0a, 0x0a, 0x0a]));
+
+    const result = scan({ path: tmpDir });
+
+    expect(result.totalLines).toBe(1);
+    expect(result.totalFiles).toBe(2);
+  });
+
+  it("reports relative paths with forward slashes", () => {
+    writeFile("src/deep/big.ts", "x".repeat(600 * 1024));
+
+    const result = scan({ path: tmpDir });
+
+    expect(result.weight.largeFiles[0].path).toBe("src/deep/big.ts");
   });
 
   it("ignores node_modules", () => {

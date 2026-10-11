@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { defaults } from "./config.js";
-import { dirSize, readPackageJson } from "./fs-utils.js";
+import { dirSize, listFiles, readPackageJson, resolveProjectPath } from "./fs-utils.js";
 import type {
   CategoryBreakdown,
   ComplexityReport,
@@ -27,9 +27,9 @@ const CONFIG_NAMES = new Set(defaults.configNames);
 const LANGUAGE_MAP = defaults.languageMap;
 
 export function scan(options: ScanOptions): ScanResult {
-  const root = path.resolve(options.path);
+  const root = resolveProjectPath(options.path);
   const limit = options.limit || 10;
-  const files = collectFiles(root);
+  const files = listFiles(root, IGNORE_DIRS);
 
   const languages = new Map<string, LanguageBreakdown>();
   const categories = new Map<FileCategory, CategoryBreakdown>();
@@ -46,9 +46,10 @@ export function scan(options: ScanOptions): ScanResult {
   for (const file of files) {
     const ext = path.extname(file).toLowerCase();
     const basename = path.basename(file);
-    const relative = path.relative(root, file);
-    const size = fs.statSync(file).size;
-    const lines = countLines(file);
+    const relative = toPosix(path.relative(root, file));
+    const content = fs.readFileSync(file);
+    const size = content.length;
+    const lines = isBinary(content) ? 0 : countLines(content);
     const category = categorize(ext, basename);
 
     totalFiles++;
@@ -71,7 +72,7 @@ export function scan(options: ScanOptions): ScanResult {
     }
 
     if (size > 1024) {
-      const hash = hashFile(file);
+      const hash = crypto.createHash("md5").update(content).digest("hex");
       const group = hashes.get(hash) || [];
       group.push(relative);
       hashes.set(hash, group);
@@ -125,7 +126,7 @@ export function scan(options: ScanOptions): ScanResult {
 
 export function detectProjects(root: string): string[] {
   const markers = new Set(defaults.projectMarkers);
-  const resolved = path.resolve(root);
+  const resolved = resolveProjectPath(root);
   const projects: string[] = [];
 
   for (const entry of fs.readdirSync(resolved, { withFileTypes: true })) {
@@ -169,30 +170,25 @@ function categorize(ext: string, basename: string): FileCategory {
   return "other";
 }
 
-function collectFiles(dir: string): string[] {
-  const results: string[] = [];
-
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name.startsWith(".") || IGNORE_DIRS.has(entry.name)) continue;
-
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) results.push(...collectFiles(fullPath));
-    else if (entry.isFile()) results.push(fullPath);
-  }
-
-  return results;
+// Same heuristic as git: a NUL byte in the first 8 KB means binary
+function isBinary(content: Buffer): boolean {
+  return content.subarray(0, 8000).includes(0);
 }
 
-function countLines(filePath: string): number {
-  try {
-    return fs.readFileSync(filePath, "utf-8").split("\n").length;
-  } catch {
-    return 0;
+// A trailing newline ends the last line, it does not start a new one
+function countLines(content: Buffer): number {
+  if (content.length === 0) return 0;
+
+  let lines = 0;
+  for (const byte of content) {
+    if (byte === 0x0a) lines++;
   }
+  return content[content.length - 1] === 0x0a ? lines : lines + 1;
 }
 
-function hashFile(filePath: string): string {
-  return crypto.createHash("md5").update(fs.readFileSync(filePath)).digest("hex");
+// Report paths with forward slashes on every platform
+function toPosix(p: string): string {
+  return p.split(path.sep).join("/");
 }
 
 function readDependencies(root: string): DependencyInfo | null {

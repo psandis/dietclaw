@@ -9,6 +9,15 @@ export interface PackageJson {
   scripts?: Record<string, string>;
 }
 
+// Canonical absolute path for a project. Resolves symlinks (macOS /tmp is
+// /private/tmp) and normalizes drive letter and casing on Windows, so the
+// same project always maps to the same snapshot history.
+export function resolveProjectPath(target: string): string {
+  const absolute = path.resolve(target);
+  if (!fs.existsSync(absolute)) throw new Error(`Path not found: ${absolute}`);
+  return fs.realpathSync.native(absolute);
+}
+
 export function readPackageJson(dir: string): PackageJson | null {
   try {
     return JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf-8"));
@@ -31,26 +40,18 @@ export function dirSize(dir: string): number {
   return size;
 }
 
-export function readAllSource(root: string, exts: Set<string>): string {
-  const parts: string[] = [];
+// All regular files under dir, skipping dotfiles, dot directories, and ignored
+// directory names. Symlinks are not followed.
+export function listFiles(dir: string, ignoreDirs: Set<string>): string[] {
+  const results: string[] = [];
 
-  function walk(dir: string) {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
-      const fullPath = path.join(dir, entry.name);
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith(".") || ignoreDirs.has(entry.name)) continue;
 
-      if (entry.isDirectory()) {
-        walk(fullPath);
-      } else if (entry.isFile() && exts.has(path.extname(entry.name).toLowerCase())) {
-        try {
-          parts.push(fs.readFileSync(fullPath, "utf-8"));
-        } catch {
-          /* skip */
-        }
-      }
-    }
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) results.push(...listFiles(fullPath, ignoreDirs));
+    else if (entry.isFile()) results.push(fullPath);
   }
 
-  walk(root);
-  return parts.join("\n");
+  return results;
 }
