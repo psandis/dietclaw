@@ -204,6 +204,50 @@ describe("scan", () => {
     expect(result.dependencies?.devCount).toBe(1);
   });
 
+  it("counts pnpm packages once per version and skips entries the lockfile dropped", () => {
+    writeFile("package.json", JSON.stringify({ dependencies: { chalk: "^6.0.0" } }));
+    writeFile(
+      "pnpm-lock.yaml",
+      [
+        "lockfileVersion: '9.0'",
+        "importers:",
+        "  .:",
+        "    dependencies:",
+        "      chalk: {specifier: ^6.0.0, version: 6.0.1}",
+        "      vite: {specifier: ^8.0.0, version: 8.3.4(tsx@4.23.15)}",
+        "packages:",
+        "  chalk@6.0.1: {}",
+        "  vite@8.3.4: {}",
+        "",
+      ].join("\n"),
+    );
+    // Two peer variants of vite 8.3.4, plus a leftover chalk 5.0.0 the lockfile no longer has
+    for (const dir of [
+      "chalk@6.0.1",
+      "chalk@5.0.0",
+      "vite@8.3.4_tsx@4.23.15",
+      "vite@8.3.4_tsx@4.23.12",
+    ]) {
+      writeFile(`node_modules/.pnpm/${dir}/node_modules/.keep`, "");
+    }
+
+    const result = scan({ path: tmpDir });
+
+    expect(result.dependencies?.transitiveDeps).toBe(2);
+  });
+
+  it("counts every pnpm store package when the lockfile is unreadable", () => {
+    writeFile("package.json", JSON.stringify({ dependencies: {} }));
+    writeFile("pnpm-lock.yaml", "lockfileVersion: '6.0'\nimporters:\n  .:\n    dependencies: {}\n");
+    for (const dir of ["chalk@6.0.1", "chalk@5.0.0"]) {
+      writeFile(`node_modules/.pnpm/${dir}/node_modules/.keep`, "");
+    }
+
+    const result = scan({ path: tmpDir });
+
+    expect(result.dependencies?.transitiveDeps).toBe(2);
+  });
+
   it("returns null dependencies when no package.json", () => {
     writeFile("app.ts", "code\n");
 

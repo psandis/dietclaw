@@ -7,7 +7,6 @@ import {
   findImportedPackages,
   labelRequiredBy,
   parseNpmOutdated,
-  parsePnpmDirEntry,
 } from "../src/lib/deps.js";
 import type { PnpmLockfile } from "../src/lib/pnpm-lock.js";
 
@@ -149,29 +148,5 @@ describe("findDuplicates", () => {
 
   it("returns nothing when every package has one version", () => {
     expect(findDuplicates(makeLockfile({ a: ["1.0.0"] }))).toEqual([]);
-  });
-});
-
-describe("parsePnpmDirEntry", () => {
-  it("parses unscoped packages", () => {
-    expect(parsePnpmDirEntry("chalk@5.6.2")).toEqual({ name: "chalk", version: "5.6.2" });
-  });
-
-  it("parses scoped packages", () => {
-    expect(parsePnpmDirEntry("@types+node@26.6.5")).toEqual({
-      name: "@types/node",
-      version: "26.6.5",
-    });
-  });
-
-  it("strips peer dependency suffixes", () => {
-    expect(parsePnpmDirEntry("vitest@5.0.3_@types+node@26.6.5")).toEqual({
-      name: "vitest",
-      version: "5.0.3",
-    });
-  });
-
-  it("rejects entries without a version", () => {
-    expect(parsePnpmDirEntry("node_modules")).toBeNull();
   });
 });

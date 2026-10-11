@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-11
+
+### Fixed
+
+- Outdated packages on a 0.x version were labeled `minor` when the update was outside the caret range (for example 0.120.0 to 0.133.0). An update is now `major` whenever `npm update` would not install it, following npm's `^` rules for 0.x and 0.0.x versions.
+- `scan` counted every folder in `node_modules/.pnpm` as an installed package, including leftovers from earlier installs and each peer-dependency variant separately. It now counts distinct packages the lockfile still references, matching `deps` and pnpm's own count.
+- The CI smoke test ran under PowerShell on Windows, where only the last command's exit code was checked. It now runs under bash on every platform.
+
+### Added
+
+- End-to-end test of the outdated check through the real `npm outdated` and npm registry.
+- `deps` in the CI smoke test on macOS, Linux, and Windows.
+- Tests for update levels on 0.x and 0.0.x versions, pnpm store folder parsing, and package counting with and without a lockfile (119 to 128 tests).
+
+### Changed
+
+- README: the `trend` example shows dietclaw's own history from v0.2.0 to v0.3.1, and the update-level rule is documented under `deps`.
+
 ## [0.3.0] - 2026-10-11
 
 ### Added
@@ -78,7 +96,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--json` output on all commands.
 - All classification rules in `data/defaults.jsonc`, editable without code changes.
 
-[Unreleased]: https://github.com/psandis/dietclaw/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/psandis/dietclaw/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/psandis/dietclaw/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/psandis/dietclaw/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/psandis/dietclaw/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/psandis/dietclaw/releases/tag/v0.1.0

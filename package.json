@@ -1,6 +1,6 @@
 {
   "name": "dietclaw",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Codebase health monitor. Find out why your project is getting fat.",
   "type": "module",
   "bin": {

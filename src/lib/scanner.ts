@@ -3,6 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { defaults } from "./config.js";
 import { dirSize, listFiles, readPackageJson, resolveProjectPath } from "./fs-utils.js";
+import {
+  LockfileError,
+  listPnpmStoreEntries,
+  type PnpmLockfile,
+  readPnpmLockfile,
+} from "./pnpm-lock.js";
 import type {
   CategoryBreakdown,
   ComplexityReport,
@@ -204,17 +210,30 @@ function readDependencies(root: string): DependencyInfo | null {
     count,
     devCount,
     totalSize: hasNodeModules ? dirSize(nmPath) : null,
-    transitiveDeps: hasNodeModules ? countTransitiveDeps(nmPath) : null,
+    transitiveDeps: hasNodeModules ? countTransitiveDeps(root, nmPath) : null,
   };
 }
 
-function countTransitiveDeps(nmPath: string): number {
+// scan only uses the lockfile to filter its package count; an unreadable
+// lockfile is reported by `deps`, and scan falls back to counting the store
+function readLockfileIfValid(root: string): PnpmLockfile | null {
+  try {
+    return readPnpmLockfile(root);
+  } catch (err) {
+    if (err instanceof LockfileError) return null;
+    throw err;
+  }
+}
+
+// Distinct installed packages (name@version). For pnpm, peer variants of the
+// same version count once, and store entries the lockfile no longer
+// references are skipped, matching what `deps` reports.
+function countTransitiveDeps(root: string, nmPath: string): number {
   const pnpmPath = path.join(nmPath, ".pnpm");
 
   if (fs.existsSync(pnpmPath)) {
-    return fs
-      .readdirSync(pnpmPath, { withFileTypes: true })
-      .filter((e) => e.isDirectory() && !e.name.startsWith(".")).length;
+    const entries = listPnpmStoreEntries(pnpmPath, readLockfileIfValid(root));
+    return new Set(entries.map((e) => `${e.name}@${e.version}`)).size;
   }
 
   let count = 0;

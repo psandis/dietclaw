@@ -11,7 +11,12 @@ import {
   resolveProjectPath,
 } from "./fs-utils.js";
 import { collectModuleSpecifiers, packageNameOf } from "./imports.js";
-import { LockfileError, type PnpmLockfile, readPnpmLockfile } from "./pnpm-lock.js";
+import {
+  LockfileError,
+  listPnpmStoreEntries,
+  type PnpmLockfile,
+  readPnpmLockfile,
+} from "./pnpm-lock.js";
 import type {
   DepsOptions,
   DepsResult,
@@ -180,20 +185,11 @@ function findHeaviest(root: string, lockfile: PnpmLockfile | null, limit: number
   return packages.sort((a, b) => b.size - a.size).slice(0, limit);
 }
 
-// When a lockfile is available, store entries it no longer references
-// (left behind after dependency changes) are skipped.
 function measurePnpmPackages(pnpmPath: string, lockfile: PnpmLockfile | null): HeavyPackage[] {
   const largest = new Map<string, number>();
 
-  for (const entry of fs.readdirSync(pnpmPath, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-
-    const parsed = parsePnpmDirEntry(entry.name);
-    if (!parsed) continue;
-    if (lockfile && !lockfile.versions.get(parsed.name)?.has(parsed.version)) continue;
-
-    const { name } = parsed;
-    const pkgDir = path.join(pnpmPath, entry.name, "node_modules", ...name.split("/"));
+  for (const { dirName, name } of listPnpmStoreEntries(pnpmPath, lockfile)) {
+    const pkgDir = path.join(pnpmPath, dirName, "node_modules", ...name.split("/"));
     if (!fs.existsSync(pkgDir)) continue;
 
     const size = dirSize(pkgDir);
@@ -264,35 +260,4 @@ export function labelRequiredBy(isDirect: boolean, parents: Set<string> | undefi
 
 function compareVersions(a: string, b: string): number {
   return semver.valid(a) && semver.valid(b) ? semver.compare(a, b) : a.localeCompare(b);
-}
-
-// --- pnpm directory name parsing ---
-
-function parsePnpmDirName(dirName: string): string | null {
-  if (dirName.startsWith("@")) {
-    const withSlash = dirName.replace(/\+/, "/");
-    const slashIdx = withSlash.indexOf("/");
-    const atIdx = withSlash.indexOf("@", slashIdx + 1);
-    return atIdx > 0 ? withSlash.slice(0, atIdx) : null;
-  }
-
-  const atIdx = dirName.indexOf("@");
-  return atIdx > 0 ? dirName.slice(0, atIdx) : null;
-}
-
-export function parsePnpmDirEntry(dirName: string): { name: string; version: string } | null {
-  const name = parsePnpmDirName(dirName);
-  if (!name) return null;
-
-  const versionStart = dirName.startsWith("@")
-    ? dirName.indexOf("@", dirName.indexOf("+") + 1) + 1
-    : dirName.indexOf("@") + 1;
-
-  let versionEnd = dirName.indexOf("_", versionStart);
-  if (versionEnd === -1) versionEnd = dirName.length;
-
-  const version = dirName.slice(versionStart, versionEnd);
-  if (!/^\d+\.\d+\.\d+/.test(version)) return null;
-
-  return { name, version };
 }

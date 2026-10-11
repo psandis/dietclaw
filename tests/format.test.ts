@@ -67,6 +67,21 @@ describe("updateLevel", () => {
 
   it("classifies prereleases by their target level", () => {
     expect(updateLevel("1.0.0", "2.0.0-beta.1")).toBe("major");
+    expect(updateLevel("1.0.0", "1.1.0-rc.1")).toBe("minor");
+  });
+
+  it("treats a 0.x minor bump as major, following npm caret rules", () => {
+    expect(updateLevel("0.120.0", "0.133.0")).toBe("major");
+    expect(updateLevel("0.120.0", "0.120.5")).toBe("patch");
+  });
+
+  it("treats any 0.0.x bump as major", () => {
+    expect(updateLevel("0.0.3", "0.0.4")).toBe("major");
+  });
+
+  it("returns other when latest is not newer", () => {
+    expect(updateLevel("2.0.0", "2.0.0")).toBe("other");
+    expect(updateLevel("2.0.0", "1.9.0")).toBe("other");
   });
 
   it("returns other for versions that are not valid semver", () => {

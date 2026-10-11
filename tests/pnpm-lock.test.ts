@@ -1,8 +1,13 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   installsOnThisPlatform,
   LockfileError,
+  listPnpmStoreEntries,
   parsePackageKey,
+  parsePnpmDirEntry,
   parsePnpmLockfile,
 } from "../src/lib/pnpm-lock.js";
 
@@ -154,6 +159,86 @@ describe("parsePackageKey", () => {
   it("rejects keys without a version", () => {
     expect(parsePackageKey("chalk")).toBeNull();
     expect(parsePackageKey("@scope/pkg")).toBeNull();
+  });
+});
+
+describe("parsePnpmDirEntry", () => {
+  it("parses unscoped packages", () => {
+    expect(parsePnpmDirEntry("chalk@5.6.2")).toEqual({ name: "chalk", version: "5.6.2" });
+  });
+
+  it("parses scoped packages", () => {
+    expect(parsePnpmDirEntry("@types+node@26.6.5")).toEqual({
+      name: "@types/node",
+      version: "26.6.5",
+    });
+  });
+
+  it("strips peer dependency suffixes", () => {
+    expect(parsePnpmDirEntry("vitest@5.0.3_@types+node@26.6.5")).toEqual({
+      name: "vitest",
+      version: "5.0.3",
+    });
+    expect(parsePnpmDirEntry("@vitest+mocker@5.0.3_vite@8.3.4")).toEqual({
+      name: "@vitest/mocker",
+      version: "5.0.3",
+    });
+  });
+
+  it("keeps prerelease versions", () => {
+    expect(parsePnpmDirEntry("pkg@2.0.0-beta.1")).toEqual({ name: "pkg", version: "2.0.0-beta.1" });
+  });
+
+  it("rejects entries without a valid version", () => {
+    expect(parsePnpmDirEntry("node_modules")).toBeNull();
+    expect(parsePnpmDirEntry("lock.yaml")).toBeNull();
+    expect(parsePnpmDirEntry("@scope@1.0.0")).toBeNull();
+    expect(parsePnpmDirEntry("pkg@latest")).toBeNull();
+  });
+});
+
+describe("listPnpmStoreEntries", () => {
+  let store: string;
+
+  beforeEach(() => {
+    store = fs.mkdtempSync(path.join(os.tmpdir(), "dietclaw-store-test-"));
+    for (const dir of [
+      "chalk@6.0.1",
+      "chalk@5.0.0",
+      "vite@8.3.4_tsx@4.23.15",
+      ".modules.yaml-dir",
+    ]) {
+      fs.mkdirSync(path.join(store, dir));
+    }
+    fs.writeFileSync(path.join(store, "lock.yaml"), "");
+  });
+
+  afterEach(() => {
+    fs.rmSync(store, { recursive: true, force: true });
+  });
+
+  const names = (entries: { name: string; version: string }[]) =>
+    entries.map((e) => `${e.name}@${e.version}`).sort();
+
+  it("lists every package folder when there is no lockfile", () => {
+    expect(names(listPnpmStoreEntries(store, null))).toEqual([
+      "chalk@5.0.0",
+      "chalk@6.0.1",
+      "vite@8.3.4",
+    ]);
+  });
+
+  it("skips folders the lockfile no longer references", () => {
+    const lockfile = {
+      versions: new Map([
+        ["chalk", new Set(["6.0.1"])],
+        ["vite", new Set(["8.3.4"])],
+      ]),
+      dependents: new Map(),
+      direct: new Map(),
+    };
+
+    expect(names(listPnpmStoreEntries(store, lockfile))).toEqual(["chalk@6.0.1", "vite@8.3.4"]);
   });
 });
 

@@ -93,43 +93,44 @@ dietclaw scan
 
   Weight
     Total        2.5 MB
-    Source code  84.1 KB  (3.3%)
+    Source code  90.0 KB  (3.5%)
 
   Breakdown
 
 ┌─────────────────┬─────────┬───────┬───────┐
 │ Category        │ Size    │ Files │ Share │
 ├─────────────────┼─────────┼───────┼───────┤
-│ Assets          │ 2.4 MB  │ 1     │ 93.5% │
-│ Source code     │ 84.1 KB │ 19    │ 3.3%  │
+│ Assets          │ 2.4 MB  │ 1     │ 93.2% │
+│ Source code     │ 90.0 KB │ 19    │ 3.5%  │
 │ Generated files │ 53.6 KB │ 1     │ 2.1%  │
-│ Other files     │ 28.8 KB │ 4     │ 1.1%  │
+│ Other files     │ 30.7 KB │ 4     │ 1.2%  │
 │ Configuration   │ 2.3 KB  │ 4     │ 0.1%  │
 └─────────────────┴─────────┴───────┴───────┘
 
   Dependencies
     Direct       7 production + 9 development
-    Installed    62 packages (198.4 MB)
+    Installed    56 packages (198.4 MB)
 
   Languages
 
 ┌────────────┬───────┬───────┬───────┐
 │ Language   │ Lines │ Files │ Share │
 ├────────────┼───────┼───────┼───────┤
-│ TypeScript │ 2,805 │ 19    │ 51.7% │
-│ YAML       │ 1,696 │ 2     │ 31.3% │
-│ Markdown   │ 471   │ 2     │ 8.7%  │
-│ JSON       │ 97    │ 3     │ 1.8%  │
+│ TypeScript │ 2,974 │ 19    │ 52.9% │
+│ YAML       │ 1,696 │ 2     │ 30.2% │
+│ Markdown   │ 493   │ 2     │ 8.8%  │
+│ JSON       │ 97    │ 3     │ 1.7%  │
 └────────────┴───────┴───────┴───────┘
 
-  Long Files (1)
+  Long Files (2)
   Source files exceeding the line threshold
 
-┌───────────────────┬───────┐
-│ File              │ Lines │
-├───────────────────┼───────┤
-│ src/lib/format.ts │ 360   │
-└───────────────────┴───────┘
+┌───────────────────────┬───────┐
+│ File                  │ Lines │
+├───────────────────────┼───────┤
+│ src/lib/format.ts     │ 361   │
+│ tests/scanner.test.ts │ 343   │
+└───────────────────────┴───────┘
 
   Large Files (1)
   Files exceeding the size threshold
@@ -158,9 +159,9 @@ dietclaw scan ~/Projects --each
 ┌────────────────────┬─────────────┬──────────┬──────────────┐
 │ Project            │ Source code │ Assets   │ Dependencies │
 ├────────────────────┼─────────────┼──────────┼──────────────┤
-│ dietclaw           │ 84.1 KB     │ 2.4 MB   │ 198.4 MB     │
+│ dietclaw           │ 90.0 KB     │ 2.4 MB   │ 198.4 MB     │
 │ driftclaw          │ 56.6 KB     │ 2.6 MB   │ 151.8 MB     │
-│ dustclaw           │ 36.5 KB     │ 2.8 MB   │ 210.4 MB     │
+│ dustclaw           │ 52.6 KB     │ 2.8 MB   │ 210.4 MB     │
 │ feedclaw           │ 37.2 KB     │ 1.8 MB   │ 282.7 MB     │
 └────────────────────┴─────────────┴──────────┴──────────────┘
 ```
@@ -232,6 +233,7 @@ Notes:
 
 - `--limit <n>` controls how many items per section (default: `20`)
 - outdated packages come from `npm outdated`; if npm is missing or the check fails, the report says "Could not check" instead of claiming everything is up to date
+- the update level is `major` when the latest version is outside the caret range of the installed one (`npm update` will not install it), so a 0.x minor bump such as 0.120.0 to 0.133.0 counts as `major`; otherwise `minor` or `patch`
 - unused dependencies are found by parsing every JavaScript and TypeScript file (extensions listed in `moduleExts` in `data/defaults.jsonc`) and collecting `import`, `export ... from`, `import()`, `require()`, and TypeScript `import x = require()` references. Only static strings count, so `require(variable)` is not resolved, and packages used only from config files, npm scripts, or non-JS files are reported as unused
 - version conflicts are read from `pnpm-lock.yaml` (lockfile format v9, pnpm 9 and later) and limited to packages that install on the current OS and CPU; other package managers are not analyzed for conflicts
 - heaviest packages are measured on disk in `node_modules`; with a pnpm lockfile, store entries the lockfile no longer references are skipped
@@ -252,21 +254,24 @@ dietclaw trend
   Project Trend
   ~/Projects/dietclaw
 
-  History (2 snapshots)
+  History (3 snapshots)
 
-┌─────────────────────┬───────┬───────┬─────────────┬────────┬──────────┬──────────────┐
-│ Timestamp           │ Files │ Lines │ Source code │ Total  │ Packages │ Dependencies │
-├─────────────────────┼───────┼───────┼─────────────┼────────┼──────────┼──────────────┤
-│ 2026-10-11 19:11:36 │ 23    │ 5,051 │ 62.1 KB     │ 2.5 MB │ 14       │ 197.3 MB     │
-│ 2026-10-11 19:09:50 │ 23    │ 4,968 │ 62.1 KB     │ 2.5 MB │ 14       │ 202.2 MB     │
-└─────────────────────┴───────┴───────┴─────────────┴────────┴──────────┴──────────────┘
+┌─────────────────────┬───────┬────────┬─────────────┬────────┬──────────┬──────────────┐
+│ Timestamp           │ Files │ Lines  │ Source code │ Total  │ Packages │ Dependencies │
+├─────────────────────┼───────┼────────┼─────────────┼────────┼──────────┼──────────────┤
+│ 2026-10-11 20:30:52 │ 29    │ 5,615  │ 90.0 KB     │ 2.5 MB │ 16       │ 198.4 MB     │
+│ 2026-04-01 09:13:44 │ 19    │ 12,831 │ 44.4 KB     │ 2.5 MB │ 10       │ 108.3 MB     │
+│ 2026-04-01 09:13:27 │ 19    │ 12,831 │ 44.4 KB     │ 2.5 MB │ 10       │ 108.3 MB     │
+└─────────────────────┴───────┴────────┴─────────────┴────────┴──────────┴──────────────┘
 
   Change
-    Total        +3.5 KB
-    Source code  +12 B
-    Files        no change
-    Lines        +83
+    Total        +63.5 KB
+    Source code  +45.6 KB
+    Files        +10
+    Lines        -7,216
 ```
+
+This is dietclaw's own history from v0.2.0 to v0.3.1. Lines went down while the code grew because 0.3.0 stopped counting lines in binary files such as `assets/dietclaw.png`.
 
 Notes:
 

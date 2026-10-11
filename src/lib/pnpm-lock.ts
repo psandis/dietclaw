@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import semver from "semver";
 import { parseAllDocuments } from "yaml";
 
 // Reads pnpm-lock.yaml (lockfile format v9, written by pnpm 9 and later).
@@ -162,6 +163,44 @@ function matchesList(list: string[] | undefined, value: string): boolean {
 function linuxLibc(): "glibc" | "musl" {
   const report = process.report.getReport() as { header?: { glibcVersionRuntime?: string } };
   return report.header?.glibcVersionRuntime ? "glibc" : "musl";
+}
+
+// Package folders in node_modules/.pnpm. With a lockfile, entries it no longer
+// references (left behind after dependency changes) are skipped.
+export function listPnpmStoreEntries(
+  pnpmPath: string,
+  lockfile: PnpmLockfile | null,
+): { dirName: string; name: string; version: string }[] {
+  const entries: { dirName: string; name: string; version: string }[] = [];
+
+  for (const entry of fs.readdirSync(pnpmPath, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+
+    const parsed = parsePnpmDirEntry(entry.name);
+    if (!parsed) continue;
+    if (lockfile && !lockfile.versions.get(parsed.name)?.has(parsed.version)) continue;
+
+    entries.push({ dirName: entry.name, ...parsed });
+  }
+
+  return entries;
+}
+
+// Store folder names encode "/" as "+" and append peer suffixes after "_":
+//   "@types+node@26.6.5" -> @types/node 26.6.5
+//   "vite@8.3.4_@types+node@26.6.5" -> vite 8.3.4
+export function parsePnpmDirEntry(dirName: string): { name: string; version: string } | null {
+  const scoped = dirName.startsWith("@");
+  const nameEnd = dirName.indexOf("@", scoped ? dirName.indexOf("+") + 1 : 1);
+  if (nameEnd <= 0 || (scoped && dirName.indexOf("+") === -1)) return null;
+
+  const name = scoped ? dirName.slice(0, nameEnd).replace("+", "/") : dirName.slice(0, nameEnd);
+
+  const versionStart = nameEnd + 1;
+  const peerStart = dirName.indexOf("_", versionStart);
+  const version = dirName.slice(versionStart, peerStart === -1 ? undefined : peerStart);
+
+  return semver.valid(version) ? { name, version } : null;
 }
 
 function addToSet<K, V>(map: Map<K, Set<V>>, key: K, value: V): void {

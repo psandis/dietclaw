@@ -27,21 +27,22 @@ const UPDATE_COLORS: Record<UpdateLevel, (text: string) => string> = {
   other: chalk.gray,
 };
 
+// "major" means latest is outside the caret range of current (^current), so
+// `npm update` will not install it and it may contain breaking changes. Under
+// npm's caret rules that includes minor bumps of 0.x versions (0.120 -> 0.133)
+// and any bump of 0.0.x versions.
 export function updateLevel(current: string, latest: string): UpdateLevel {
   if (!semver.valid(current) || !semver.valid(latest)) return "other";
+  if (!semver.gt(latest, current)) return "other";
+
+  if (!semver.satisfies(latest, `^${current}`, { includePrerelease: true })) return "major";
 
   switch (semver.diff(current, latest)) {
-    case "major":
-    case "premajor":
-      return "major";
     case "minor":
     case "preminor":
       return "minor";
-    case "patch":
-    case "prepatch":
-      return "patch";
     default:
-      return "other";
+      return "patch";
   }
 }
 

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import semver from "semver";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -124,6 +125,31 @@ describe("cli", { timeout: 30000 }, () => {
     expect(result.path).toBe(fs.realpathSync.native(project));
     expect(result.unused).toEqual([]);
     expect(result.warnings).toEqual([]);
+  });
+
+  // End to end through the real `npm outdated`, which queries the npm registry
+  it("reports outdated packages from npm", { timeout: 120000 }, () => {
+    writeFile(
+      "package.json",
+      JSON.stringify({ name: "fixture", dependencies: { chalk: "5.0.0" } }),
+    );
+    writeFile(
+      "node_modules/chalk/package.json",
+      JSON.stringify({ name: "chalk", version: "5.0.0" }),
+    );
+
+    const result = runJson<{
+      outdated: { name: string; current: string; latest: string; type: string }[] | null;
+    }>("deps", project);
+
+    expect(result.outdated).not.toBeNull();
+    const chalk = result.outdated?.find((p) => p.name === "chalk");
+    expect(chalk).toMatchObject({ name: "chalk", current: "5.0.0", type: "dep" });
+    expect(semver.gt(chalk?.latest ?? "0.0.0", "5.0.0")).toBe(true);
+
+    const text = run("deps", project).stdout;
+    expect(text).toMatch(/Outdated Packages \(1\)/);
+    expect(text).toMatch(/chalk +│ 5\.0\.0 +│ \S+ +│ major/);
   });
 
   it("fails with a one-line error for a missing path", () => {

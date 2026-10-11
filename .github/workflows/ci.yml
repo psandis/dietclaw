@@ -35,8 +35,13 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+      # bash on every OS, so a failure on any line fails the step
+      # (PowerShell on Windows would only check the last command)
       - name: Smoke test the built CLI
+        shell: bash
         run: |
           node dist/cli.js --version
           node dist/cli.js scan .
           node dist/cli.js --json scan . --limit 3
+          node dist/cli.js deps .
+          node dist/cli.js --json deps . --limit 3
