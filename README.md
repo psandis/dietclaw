@@ -312,6 +312,7 @@ All classification rules live in `data/defaults.jsonc`, a JSONC file with inline
 - adjust thresholds for large files (default: 500 KB) and long files (default: 300 lines)
 - add directories to the ignore list
 - add project markers for `--each` detection
+- choose which JavaScript and TypeScript files are parsed for imports (`moduleExts`, including `.mts` and `.cts`)
 
 An invalid `defaults.jsonc` stops dietclaw with an error naming the file and the position of the problem.
 
