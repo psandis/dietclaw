@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Windows support: no shell-specific syntax, forward-slash paths in all output, and Windows install and storage instructions in the README.
 - CI on GitHub Actions: lint, type check, tests, build, and a CLI smoke test on macOS, Linux, and Windows with Node.js 22 and 24.
+- `.gitattributes` keeps LF line endings on every platform, so Windows checkouts pass lint.
 - `scan --each --save` saves one snapshot per detected project.
 - `--limit` is validated and rejects anything other than a positive integer.
 - `pnpm typecheck` script. Type checking now covers the tests as well as the source.
